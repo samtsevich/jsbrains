@@ -1,8 +1,8 @@
 import { SmartHttpRequest } from "smart-http-request";
-import { SmartStreamer } from '../streamer.js'; // move to smart-http-request???
-import { SmartChatModelAdapter } from './_adapter.js';
 import { SmartHttpRequestFetchAdapter } from "smart-http-request/adapters/fetch.js";
 import { normalize_error } from 'smart-utils/normalize_error.js';
+import { SmartStreamer } from '../streamer.js'; // move to smart-http-request???
+import { SmartChatModelAdapter } from './_adapter.js';
 
 const MODEL_ADAPTER_CACHE = {}; // this is gross but makes it easy
 const MODELS_DEV_CACHE = { data: null, fetched_at: 0 };
@@ -22,6 +22,19 @@ export class SmartChatModelApiAdapter extends SmartChatModelAdapter {
   constructor(model){
     super(model);
     this.model_data_loaded_at = 0;
+  }
+  
+  /**
+   * Load the adapter and fetch available models.
+   * @async
+   * @returns {Promise<void>}
+   */
+  async load() {
+    await super.load();
+    // Trigger model loading in background (don't await to avoid blocking)
+    this.get_models().catch(err => {
+      console.error('Failed to load models during adapter initialization:', err);
+    });
   }
   
   /**

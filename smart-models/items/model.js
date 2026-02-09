@@ -129,8 +129,25 @@ export class Model extends CollectionItem {
     }, ms);
   }
 
-  async get_model_key_options() {
-    const model_configs = await this.instance.get_models();
+  get_model_key_options() {
+    // Return cached model options if available
+    const model_configs = this.data.provider_models || {};
+    
+    // If we don't have cached data, trigger async load in background
+    if (Object.keys(model_configs).length === 0) {
+      // Trigger async load (will call re_render_settings when done)
+      this.instance.get_models().catch(err => {
+        console.error('Failed to load models:', err);
+      });
+      
+      // Return placeholder while loading
+      return [{
+        label: 'Loading models...',
+        value: '',
+      }];
+    }
+    
+    // Return cached options
     return Object.entries(model_configs).map(([key, model_config]) => ({
       label: model_config.name || key,
       value: model_config.key || key,
@@ -209,6 +226,24 @@ export class Model extends CollectionItem {
   delete_model() {
     this.delete();
     this.debounce_save(); // emits model:changed
+  }
+
+  /**
+   * Re-render settings UI.
+   * This method can be set by UI components (like modals) to trigger re-rendering.
+   */
+  re_render_settings() {
+    if (typeof this._re_render_settings_callback === 'function') {
+      this._re_render_settings_callback();
+    }
+  }
+
+  /**
+   * Set callback for re-rendering settings.
+   * @param {Function} callback - Callback to call when settings should be re-rendered
+   */
+  set_re_render_settings_callback(callback) {
+    this._re_render_settings_callback = callback;
   }
 
   /**

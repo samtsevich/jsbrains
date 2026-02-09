@@ -1,5 +1,5 @@
-import { SmartChatModelApiAdapter, SmartChatModelRequestAdapter, SmartChatModelResponseAdapter } from "./_api.js";
 import { normalize_error } from 'smart-utils/normalize_error.js';
+import { SmartChatModelApiAdapter, SmartChatModelRequestAdapter, SmartChatModelResponseAdapter } from "./_api.js";
 
 /**
  * Adapter for Ollama's local API.
@@ -49,21 +49,25 @@ export class SmartChatModelOllamaAdapter extends SmartChatModelApiAdapter {
       && typeof this.model_data === 'object'
       && Object.keys(this.model_data || {}).length > 0
       && this.model_data_loaded_at
-      && (time_now - this.model_data_loaded_at < 1 * 60 * 60 * 1000) // cache fresh for 1 hour
+      && (Date.now() - this.model_data_loaded_at < 1 * 60 * 60 * 1000) // cache fresh for 1 hour
     ) return this.model_data; // return cached models if not refreshing
     try {
       const list_resp = await this.http_adapter.request(this.models_request_params);
       const list_data = await list_resp.json();
-      // get model details for each model in list
       const models_raw_data = [];
       for(const model of list_data.models){
-        const model_details_resp = await this.http_adapter.request({
-          url: this.model_show_endpoint,
-          method: 'POST',
-          body: JSON.stringify({model: model.name}),
-        });
-        const model_details_data = await model_details_resp.json();
-        models_raw_data.push({...model_details_data, name: model.name});
+        try {
+          const model_details_resp = await this.http_adapter.request({
+            url: this.model_show_endpoint,
+            method: 'POST',
+            body: JSON.stringify({model: model.name}),
+          });
+          const model_details_data = await model_details_resp.json();
+          models_raw_data.push({...model_details_data, name: model.name});
+        } catch (error) {
+          console.warn('Failed to fetch Ollama model details for:', model.name);
+          models_raw_data.push({ name: model.name, model_info: {} });
+        }
       }
       this.model_data = this.parse_model_data(models_raw_data);
       await this.get_enriched_model_data();
@@ -73,10 +77,20 @@ export class SmartChatModelOllamaAdapter extends SmartChatModelApiAdapter {
       }
       this.model_data_loaded_at = Date.now();
       return this.model_data;
-
     } catch (error) {
-      console.error('Failed to fetch model data:', error);
-      return {"_": {id: `Failed to fetch models from ${this.model.adapter_name}`}};
+      console.error('Failed to fetch models from Ollama:', error);
+      console.log('Make sure Ollama is running at:', this.host);
+      this.model_data = {
+        "_error": {
+          id: "_error",
+          name: `Failed to fetch models from Ollama at ${this.host}. Make sure Ollama is running (ollama serve).`,
+        }
+      };
+      this.model.data.provider_models = this.model_data;
+      if(typeof this.model.re_render_settings === 'function') {
+        this.model.re_render_settings();
+      }
+      return this.model_data;
     }
   }
 
@@ -106,7 +120,7 @@ export class SmartChatModelOllamaAdapter extends SmartChatModelApiAdapter {
           model_name: model.name,
           id: model.name,
           multimodal: false,
-          max_input_tokens: Object.entries(model.model_info).find(m => m[0].includes('.context_length'))[1],
+          max_input_tokens: Object.entries(model.model_info || {}).find(m => m[0].includes('.context_length'))?.[1] || 0,
         };
         acc[model.name] = out;
         return acc;

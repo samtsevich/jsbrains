@@ -1,5 +1,5 @@
-import { Collection } from 'smart-collections/collection.js';
 import ajson_single_file_data_adapter from 'smart-collections/adapters/ajson_single_file.js';
+import { Collection } from 'smart-collections/collection.js';
 import { Model } from '../items/model.js';
 
 export class Models extends Collection {
@@ -15,6 +15,24 @@ export class Models extends Collection {
       if(!data.api_key && existing_from_provider.data.api_key) {
         data.api_key = existing_from_provider.data.api_key;
       }
+      // Copy over other provider-specific settings
+      const provider_config = this.env_config.providers?.[data.provider_key];
+      if(provider_config?.settings_config) {
+        Object.keys(provider_config.settings_config).forEach(key => {
+          if(!data[key] && existing_from_provider.data[key]) {
+            data[key] = existing_from_provider.data[key];
+          }
+        });
+      }
+    }
+    // Set default values from provider settings_config
+    const provider_config = this.env_config.providers?.[data.provider_key];
+    if(provider_config?.settings_config) {
+      Object.entries(provider_config.settings_config).forEach(([key, config]) => {
+        if(config.default !== undefined && data[key] === undefined) {
+          data[key] = config.default;
+        }
+      });
     }
     const item = new this.item_type(this.env, {
       ...data,
