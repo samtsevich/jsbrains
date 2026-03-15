@@ -23,7 +23,20 @@ export class SmartChatModelApiAdapter extends SmartChatModelAdapter {
     super(model);
     this.model_data_loaded_at = 0;
   }
-  
+
+  /**
+   * Load the adapter and fetch available models.
+   * @async
+   * @returns {Promise<void>}
+   */
+  async load() {
+    await super.load();
+    // Trigger model loading in background (don't await to avoid blocking)
+    this.get_models().catch(err => {
+      console.error('Failed to load models during adapter initialization:', err);
+    });
+  }
+
   /**
    * Load the adapter and fetch available models.
    * @async
