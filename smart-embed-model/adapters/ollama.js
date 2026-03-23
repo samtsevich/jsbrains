@@ -183,7 +183,13 @@ export class SmartEmbedOllamaAdapter extends SmartEmbedModelApiAdapter {
    * @returns {Promise<Object>} Map of model objects
    */
   async get_models(refresh = false) {
-    if(!this.model_data || refresh) {
+    if(!refresh
+      && typeof this.model_data === 'object'
+      && Object.keys(this.model_data || {}).length > 0
+      && this.model_data_loaded_at
+      && (Date.now() - this.model_data_loaded_at < 1 * 60 * 60 * 1000) // cache fresh for 1 hour
+    ) return this.model_data; // return cached models if not refreshing
+    try {
       const list_resp = await this.http_adapter.request({
         url: this.models_endpoint,
         method: 'GET',
@@ -194,21 +200,41 @@ export class SmartEmbedOllamaAdapter extends SmartEmbedModelApiAdapter {
       const list_data = await list_resp.json();
       const models_raw = [];
       for (const m of filter_embedding_models(list_data.models || [])) {
-        const detail_resp = await this.http_adapter.request({
-          url: this.model_show_endpoint,
-          method: 'POST',
-          body: JSON.stringify({ model: m.name }),
-        });
-        models_raw.push({ ...(await detail_resp.json()), name: m.name });
+        try {
+          const detail_resp = await this.http_adapter.request({
+            url: this.model_show_endpoint,
+            method: 'POST',
+            body: JSON.stringify({ model: m.name }),
+          });
+          models_raw.push({ ...(await detail_resp.json()), name: m.name });
+        } catch (error) {
+          console.warn('Failed to fetch Ollama model details for:', m.name);
+          models_raw.push({ name: m.name, model_info: {} });
+        }
       }
       const model_data = this.parse_model_data(models_raw);
       this.model_data = model_data;
+      this.model.data.provider_models = model_data;
+      this.model_data_loaded_at = Date.now();
       if(typeof this.model.re_render_settings === 'function') {
         this.model.re_render_settings(); // re-render settings to update models dropdown
       }
       return model_data;
+    } catch (error) {
+      console.error('Failed to fetch embedding models from Ollama:', error);
+      console.log('Make sure Ollama is running at:', this.host);
+      this.model_data = {
+        "_error": {
+          id: "_error",
+          name: `Failed to fetch models from Ollama at ${this.host}. Make sure Ollama is running (ollama serve).`,
+        }
+      };
+      this.model.data.provider_models = this.model_data;
+      if(typeof this.model.re_render_settings === 'function') {
+        this.model.re_render_settings();
+      }
+      return this.model_data;
     }
-    return this.model_data;
   }
   /**
    * Get available models as dropdown options synchronously.

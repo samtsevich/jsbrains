@@ -112,8 +112,12 @@ export class GeminiEmbedModelAdapter extends SmartEmbedModelApiAdapter {
    * Get available models (hardcoded list)
    * @returns {Promise<Object>} Map of model objects
    */
-  get_models() {
-    return Promise.resolve(this.models);
+  async get_models() {
+    this.model.data.provider_models = this.models;
+    if(typeof this.model.re_render_settings === 'function') {
+      this.model.re_render_settings();
+    }
+    return this.models;
   }
 
   get models() {

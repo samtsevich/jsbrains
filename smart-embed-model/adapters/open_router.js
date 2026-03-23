@@ -125,6 +125,7 @@ export class SmartEmbedOpenRouterAdapter extends SmartEmbedModelApiAdapter {
         },
       };
       this.model.data.provider_models = fallback_models;
+      if(typeof this.model.re_render_settings === 'function') this.model.re_render_settings();
       return fallback_models;
     }
 

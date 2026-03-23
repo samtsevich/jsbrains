@@ -103,15 +103,29 @@ export class LmStudioEmbedModelAdapter extends SmartEmbedModelApiAdapter {
   async get_models(refresh = false) {
     if (!refresh && this.model.data.provider_models) return this.model.data.provider_models;
 
-    const resp = await this.http_adapter.request({
-      url: this.models_endpoint,
-      method: "GET",
-    });
-    const raw = await resp.json();
-    const parsed = this.parse_model_data(raw);
-    this.model.data.provider_models = parsed;
-    this.model.re_render_settings();
-    return parsed;
+    try {
+      const resp = await this.http_adapter.request({
+        url: this.models_endpoint,
+        method: "GET",
+      });
+      if (resp.ok === false) throw new Error(`HTTP Error: ${resp.status}`);
+      const raw = await resp.json();
+      const parsed = this.parse_model_data(raw);
+      this.model.data.provider_models = parsed;
+      if(typeof this.model.re_render_settings === 'function') this.model.re_render_settings();
+      return parsed;
+    } catch(e) {
+      console.error("LM Studio embedding get_models error:", e);
+      const fallback = {
+        "_error": {
+          id: "_error",
+          name: `Failed to fetch from LM Studio at ${this.host}. Is it running?`,
+        }
+      };
+      this.model.data.provider_models = fallback;
+      if(typeof this.model.re_render_settings === 'function') this.model.re_render_settings();
+      return fallback;
+    }
   }
 
   parse_model_data(list) {

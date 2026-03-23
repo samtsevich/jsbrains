@@ -36,7 +36,7 @@ export class SmartEmbedTransformersIframeAdapter extends SmartEmbedIframeAdapter
    * Get available models (hardcoded list)
    * @returns {Promise<Object>} Map of model objects
    */
-  get_models() { return Promise.resolve(this.models); }
+  async get_models() { return this.models; }
   get models() {
     return transformers_models;
   }

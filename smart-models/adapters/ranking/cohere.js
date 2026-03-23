@@ -19,7 +19,7 @@ export class CohereRankingModelAdapter extends SmartRankCohereAdapter {
     }
     return this._http_adapter;
   }
-  get_models () {
+  async get_models () {
     return this.models;
   }
 }
