@@ -19,12 +19,18 @@ export class MarkdownSourceContentAdapter extends FileSourceContentAdapter {
    */
   async import() {
     if(!this.can_import) return;
-    if(!this.outdated){
+
+    const is_outdated = this.outdated;
+    const has_incomplete_block_coverage = this.has_incomplete_block_coverage();
+    const repairing_block_coverage = !is_outdated && has_incomplete_block_coverage;
+
+    if(!is_outdated && !has_incomplete_block_coverage){
       this.item.blocks.forEach(block => {
         if(!block.vec) block.queue_embed();
       });
       return;
     }
+
     const content = await this.read();
     if (!content) {
       // console.warn(`No content to import for ${this.file_path}`);
@@ -34,7 +40,7 @@ export class MarkdownSourceContentAdapter extends FileSourceContentAdapter {
       this.item.data.last_import = null;
     }
     // TODO: should be dynamic: ex. content_parsers files export a should_parse function
-    if(this.data.last_import?.hash === this.data.last_read?.hash){
+    if(!has_incomplete_block_coverage && this.data.last_import?.hash === this.data.last_read?.hash){
       if(this.data.blocks) return; // if blocks already exist, skip re-import
     }
     this.data.blocks = null;
@@ -54,7 +60,7 @@ export class MarkdownSourceContentAdapter extends FileSourceContentAdapter {
     // also queue saving
     this.item.queue_save();
     // queue embed
-    if(this.item.should_embed) this.item.queue_embed();
+    if(this.item.should_embed && !repairing_block_coverage) this.item.queue_embed();
   }
 
   // // WIP: move block parsing here
@@ -109,6 +115,16 @@ export class MarkdownSourceContentAdapter extends FileSourceContentAdapter {
     return frontmatter;
   }
 
+  has_incomplete_block_coverage() {
+    if(!this.data.blocks || !this.item.block_collection) return false;
+    return Object.entries(this.data.blocks).some(([sub_key, line_range]) => {
+      const block = this.item.block_collection.get(this.item.key + sub_key);
+      if(!block) return true;
+      const block_lines = block.lines || [];
+      return block_lines[0] !== line_range[0] || block_lines[1] !== line_range[1];
+    });
+  }
+
 
   // Erroneous reasons to skip import (logs to console)
   get can_import() {
@@ -132,22 +148,7 @@ export class MarkdownSourceContentAdapter extends FileSourceContentAdapter {
   get outdated() {
     try{
       if(!this.data.last_import){
-        // temp for backwards compatibility 2024-12-12
-        if(this.data.mtime && this.data.size && this.data.hash){
-          this.data.last_import = {
-            mtime: this.data.mtime,
-            size: this.data.size,
-            at: Date.now(),
-            hash: this.data.hash,
-          }
-          delete this.data.mtime;
-          delete this.data.size;
-          delete this.data.hash;
-        }else{
-          return true;
-        }
-        // FUTURE: remove above and return true if no last_import
-        // return true;
+        return true;
       }
       if(this.data.last_read.at > this.data.last_import.at){
         if(this.data.last_import?.hash !== this.data.last_read?.hash) return true;
